@@ -1,0 +1,41 @@
+<script>
+    document.getElementById('myForm').addEventListener('submit', function(event) {
+        console.log('Form submitted'); // Debugging output
+
+        event.preventDefault(); // Prevent form submission
+        var fileInputs = document.querySelectorAll('input[type="file"]');
+        var fileData = [];
+
+        fileInputs.forEach(function(fileInput) {
+            console.log('File input detected'); // Debugging output
+
+            if (fileInput.files.length > 0) {
+                console.log('File selected:', fileInput.files[0].name); // Debugging output
+
+                var file = fileInput.files[0];
+                var reader = new FileReader();
+
+                reader.onload = function(event) {
+                    console.log('File reader onload'); // Debugging output
+
+                    var fileContent = event.target.result.split(',')[1]; // Base64-encoded file content
+                    var fileDetails = {
+                        fileName: file.name,
+                        fileType: file.type,
+                        fileContent: fileContent
+                    };
+                    fileData.push(fileDetails); // Add file details to array
+
+                    if (fileData.length === fileInputs.length) {
+                        console.log('All files processed'); // Debugging output
+                        document.getElementById('FileData').value = JSON.stringify(fileData);
+                        console.log('Submitting form...'); // Debugging output
+                        document.getElementById('myForm').submit(); // Submit the form after processing files
+                    }
+                };
+
+                reader.readAsDataURL(file); // Read file as data URL
+            }
+        });
+    });
+</script>
