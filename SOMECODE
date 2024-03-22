@@ -128,3 +128,46 @@ IF RequestParameter('submitted') == 'true' THEN /* Check if form is submitted */
 ENDIF
 ]%%
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script runat="server">
+  Platform.Load("core", "1.1.1");
+
+  var jsonData = '[{"FieldName":"FirstName","FieldValue":"John"},{"FieldName":"LastName","FieldValue":"Doe"},{"FieldName":"Email","FieldValue":"johndoe@example.com"},{"FieldName":"PhoneNumber","FieldValue":"1234567890"}]';
+
+  try {
+    var parsedData = Platform.Function.ParseJSON(jsonData);
+    if (parsedData && parsedData.length > 0) {
+      for (var i = 0; i < parsedData.length; i++) {
+        var fieldName = parsedData[i].FieldName;
+        var fieldValue = parsedData[i].FieldValue;
+        // Perform any operations with fieldName and fieldValue here
+        Write('Field Name: ' + fieldName + ', Field Value: ' + fieldValue + '<br>');
+      }
+    } else {
+      Write('No data found.');
+    }
+  } catch (e) {
+    Write('Error parsing JSON data: ' + e);
+  }
+</script>
+
+
