@@ -1,41 +1,130 @@
-<script>
-    document.getElementById('myForm').addEventListener('submit', function(event) {
-        console.log('Form submitted'); // Debugging output
+<!DOCTYPE html>
+<html>
+<head>
+    <title>File Upload Example</title>
+</head>
+<body>
+    <form id="myForm" method="post" action="%%=RequestParameter('PAGEURL')=%%">
+        <!-- File Input Fields -->
+        <input type="file" name="fileInput1"><br>
+        <input type="file" name="fileInput2"><br>
+        <input type="file" name="fileInput3"><br>
+        <input type="file" name="fileInput4"><br>
 
-        event.preventDefault(); // Prevent form submission
-        var fileInputs = document.querySelectorAll('input[type="file"]');
-        var fileData = [];
+        <!-- Other Form Fields -->
+        First Name: <input type="text" name="FirstName"><br>
+        Last Name: <input type="text" name="LastName"><br>
+        Email: <input type="email" name="Email"><br>
+        Company Name: <input type="text" name="CompanyName"><br>
 
-        fileInputs.forEach(function(fileInput) {
-            console.log('File input detected'); // Debugging output
+        <input type="hidden" id="FileData" name="FileData">
+        <input type="hidden" name="submitted" value="true">
+        <input type="submit" value="Submit">
+    </form>
 
-            if (fileInput.files.length > 0) {
-                console.log('File selected:', fileInput.files[0].name); // Debugging output
+    <script>
+        document.getElementById('myForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form submission
+            var fileInputs = document.querySelectorAll('input[type="file"]');
+            var fileData = [];
 
-                var file = fileInput.files[0];
-                var reader = new FileReader();
+            fileInputs.forEach(function(fileInput) {
+                if (fileInput.files.length > 0) {
+                    var file = fileInput.files[0];
+                    var reader = new FileReader();
 
-                reader.onload = function(event) {
-                    console.log('File reader onload'); // Debugging output
+                    reader.onload = function(event) {
+                        var fileContent = event.target.result.split(',')[1]; // Base64-encoded file content
+                        var fileDetails = {
+                            fileName: file.name,
+                            fileType: file.type,
+                            fileContent: fileContent
+                        };
+                        fileData.push(fileDetails); // Add file details to array
 
-                    var fileContent = event.target.result.split(',')[1]; // Base64-encoded file content
-                    var fileDetails = {
-                        fileName: file.name,
-                        fileType: file.type,
-                        fileContent: fileContent
+                        if (fileData.length === fileInputs.length) {
+                            document.getElementById('FileData').value = JSON.stringify(fileData);
+                            console.log('Submitting form...');
+                            document.getElementById('myForm').submit(); // Submit the form after processing files
+                        }
                     };
-                    fileData.push(fileDetails); // Add file details to array
 
-                    if (fileData.length === fileInputs.length) {
-                        console.log('All files processed'); // Debugging output
-                        document.getElementById('FileData').value = JSON.stringify(fileData);
-                        console.log('Submitting form...'); // Debugging output
-                        document.getElementById('myForm').submit(); // Submit the form after processing files
-                    }
-                };
-
-                reader.readAsDataURL(file); // Read file as data URL
-            }
+                    reader.readAsDataURL(file); // Read file as data URL
+                }
+            });
         });
-    });
-</script>
+    </script>
+</body>
+</html>
+
+
+
+
+
+%%[
+VAR @FirstName, @LastName, @Email, @CompanyName, @FileData, @JsonObject, @LeadId
+
+IF RequestParameter('submitted') == 'true' THEN /* Check if form is submitted */
+    SET @FirstName = RequestParameter('FirstName')
+    SET @LastName = RequestParameter('LastName')
+    SET @Email = RequestParameter('Email')
+    SET @CompanyName = RequestParameter('CompanyName')
+    SET @FileData = RequestParameter('FileData') /* JSON string containing file details */
+
+    /* Execute SSJS to parse JSON string */
+    SET @SSJS = "<script runat='server'>Platform.Load('core','1'); var JsonObject = Platform.Function.ParseJSON('" + @FileData + "'); Variable.SetValue('@JsonObject', JsonObject);</script>"
+    Output(Concat(@SSJS))
+
+    /* Retrieve parsed values from SSJS and set to AMPscript variables */
+    SET @JsonObject = AttributeValue('@JsonObject')
+    SET @FileCount = 0 /* Initialize file count */
+
+    IF NOT EMPTY(@JsonObject) THEN
+        FOR @i = 1 TO RowCount(@JsonObject) DO
+            SET @FileCount = Add(@FileCount, 1) /* Increment file count */
+            SET @FileDetails = Row(@JsonObject, @i)
+            SET @FileName = Field(@FileDetails, 'fileName')
+            SET @FileType = Field(@FileDetails, 'fileType')
+            SET @FileContent = Field(@FileDetails, 'fileContent')
+
+            /* Create lead in Salesforce */
+            SET @LeadId = CreateSalesforceObject(
+                'Lead', 4, /* 4 fields to create */
+                'FirstName', @FirstName,
+                'LastName', @LastName,
+                'Email', @Email,
+                'Company', @CompanyName
+            )
+
+            /* Check if lead creation is successful */
+            IF NOT EMPTY(@LeadId) THEN
+                /* Create ContentVersion for each file */
+                SET @ContentVersionId = CreateSalesforceObject(
+                    'ContentVersion', 3, /* 3 fields to create */
+                    'Title', @FileName,
+                    'PathOnClient', @FileName,
+                    'VersionData', @FileContent
+                )
+
+                /* Create ContentDocument for each file */
+                SET @ContentDocumentId = CreateSalesforceObject(
+                    'ContentDocument', 0 /* No fields to create */
+                )
+
+                /* Create ContentDocumentLink to associate ContentDocument with lead */
+                CreateSalesforceObject(
+                    'ContentDocumentLink', 4, /* 4 fields to create */
+                    'ContentDocumentId', @ContentDocumentId,
+                    'LinkedEntityId', @LeadId,
+                    'ShareType', 'V',
+                    'Visibility', 'AllUsers'
+                )
+
+                /* Insert file details into Data Extension */
+                InsertData('YourFileDataExtensionName', 'LeadId', @LeadId, 'FileName', @FileName, 'FileType', @FileType, 'FileContent', @FileContent)
+            ENDIF
+        NEXT @i
+    ENDIF
+ENDIF
+]%%
+
