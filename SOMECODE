@@ -183,3 +183,139 @@ ENDIF
   }
 </script>
 
+--------- 1st approach -----
+
+%%[
+VAR @FirstName, @LastName, @Email, @CompanyName, @FileData, @LeadId, @ContentDocumentId
+
+IF RequestParameter('submitted') == 'true' THEN /* Check if form is submitted */
+    SET @FirstName = RequestParameter('FirstName')
+    SET @LastName = RequestParameter('LastName')
+    SET @Email = RequestParameter('Email')
+    SET @CompanyName = RequestParameter('CompanyName')
+    SET @FileData = RequestParameter('FileData') /* Assuming FileData is the parameter name for file data JSON */
+
+    /* Convert JSON string to array of objects */
+    SET @FileDataArray = Replace(@FileData, '[', '')
+    SET @FileDataArray = Replace(@FileDataArray, ']', '')
+    SET @FileDataArray = BuildRowSetFromString(@FileDataArray, ',')
+
+    /* Create lead in Salesforce */
+    SET @LeadObject = CreateSalesforceObject(
+        'Lead', 4, /* 4 fields to create */
+        'FirstName', @FirstName,
+        'LastName', @LastName,
+        'Email', @Email,
+        'Company', @CompanyName
+    )
+
+    IF NOT EMPTY(@LeadObject) THEN /* Check if lead creation is successful */
+        SET @LeadId = @LeadObject['id'] /* Get the ID of the created lead */
+
+        /* Loop through each file data object */
+        FOR @i = 1 TO RowCount(@FileDataArray) DO
+            SET @FileDetails = Row(@FileDataArray, @i)
+            SET @FileName = Field(@FileDetails, 1)
+            SET @FileType = Field(@FileDetails, 2)
+            SET @FileContent = Field(@FileDetails, 3)
+
+            /* Create ContentVersion */
+            SET @ContentVersionObject = CreateSalesforceObject(
+                'ContentVersion', 7, /* 7 fields to create */
+                'VersionData', @FileContent, /* Base64-encoded file content */
+                'Title', @FileName,
+                'PathOnClient', @FileName,
+                'FirstPublishLocationId', @LeadId, /* ParentId (LeadId) */
+                'Origin', 'H',
+                'FileType', @FileType,
+                'ContentLocation', 'S'
+            )
+
+            IF NOT EMPTY(@ContentVersionObject) THEN /* Check if ContentVersion creation is successful */
+                SET @ContentVersionId = @ContentVersionObject['id'] /* Get the ID of the created ContentVersion */
+
+                /* Create ContentDocument */
+                SET @ContentDocumentObject = CreateSalesforceObject(
+                    'ContentDocument', 1, /* 1 field to create */
+                    'Title', @FileName
+                )
+
+                IF NOT EMPTY(@ContentDocumentObject) THEN /* Check if ContentDocument creation is successful */
+                    SET @ContentDocumentId = @ContentDocumentObject['id'] /* Get the ID of the created ContentDocument */
+
+                    /* Create ContentDocumentLink to associate ContentDocument with Lead */
+                    CreateSalesforceObject(
+                        'ContentDocumentLink', 4, /* 4 fields to create */
+                        'ContentDocumentId', @ContentDocumentId,
+                        'LinkedEntityId', @LeadId,
+                        'ShareType', 'V', /* View access */
+                        'Visibility', 'AllUsers'
+                    )
+                ENDIF
+            ENDIF
+        NEXT @i
+    ENDIF
+ENDIF
+]%%
+
+------ 2nd appraoch -----
+%%[
+VAR @FirstName, @LastName, @Email, @CompanyName, @FileData, @LeadId, @ContentDocumentId
+
+IF RequestParameter('submitted') == 'true' THEN /* Check if form is submitted */
+    SET @FirstName = RequestParameter('FirstName')
+    SET @LastName = RequestParameter('LastName')
+    SET @Email = RequestParameter('Email')
+    SET @CompanyName = RequestParameter('CompanyName')
+    SET @FileData = RequestParameter('FileData') /* Assuming FileData is the parameter name for file data JSON */
+
+    /* Parse JSON manually */
+    SET @FileDataArray = BuildRowSetFromString(@FileData, ',')
+    IF RowCount(@FileDataArray) > 0 THEN
+        FOR @i = 1 TO RowCount(@FileDataArray) DO
+            SET @Row = Row(@FileDataArray, @i)
+            SET @JSONString = Field(@Row, 1)
+
+            /* Extract values from JSON string */
+            SET @FileName = Substring(@JSONString, IndexOf(@JSONString, 'fileName":"') + 11, Subtract(IndexOf(@JSONString, '","fileType"'), IndexOf(@JSONString, 'fileName":"') + 11))
+            SET @FileType = Substring(@JSONString, IndexOf(@JSONString, 'fileType":"') + 11, Subtract(IndexOf(@JSONString, '","fileContent"'), IndexOf(@JSONString, 'fileType":"') + 11))
+            SET @FileContent = Substring(@JSONString, IndexOf(@JSONString, 'fileContent":"') + 14, Subtract(Length(@JSONString), IndexOf(@JSONString, 'fileContent":"') + 13))
+
+            /* Create ContentVersion */
+            SET @ContentVersionObject = CreateSalesforceObject(
+                'ContentVersion', 7, /* 7 fields to create */
+                'VersionData', @FileContent, /* Base64-encoded file content */
+                'Title', @FileName,
+                'PathOnClient', @FileName,
+                'FirstPublishLocationId', @LeadId, /* ParentId (LeadId) */
+                'Origin', 'H',
+                'FileType', @FileType,
+                'ContentLocation', 'S'
+            )
+
+            IF NOT EMPTY(@ContentVersionObject) THEN /* Check if ContentVersion creation is successful */
+                SET @ContentVersionId = @ContentVersionObject['id'] /* Get the ID of the created ContentVersion */
+
+                /* Create ContentDocument */
+                SET @ContentDocumentObject = CreateSalesforceObject(
+                    'ContentDocument', 1, /* 1 field to create */
+                    'Title', @FileName
+                )
+
+                IF NOT EMPTY(@ContentDocumentObject) THEN /* Check if ContentDocument creation is successful */
+                    SET @ContentDocumentId = @ContentDocumentObject['id'] /* Get the ID of the created ContentDocument */
+
+                    /* Create ContentDocumentLink to associate ContentDocument with Lead */
+                    CreateSalesforceObject(
+                        'ContentDocumentLink', 4, /* 4 fields to create */
+                        'ContentDocumentId', @ContentDocumentId,
+                        'LinkedEntityId', @LeadId,
+                        'ShareType', 'V', /* View access */
+                        'Visibility', 'AllUsers'
+                    )
+                ENDIF
+            ENDIF
+        NEXT @i
+    ENDIF
+ENDIF
+]%%
