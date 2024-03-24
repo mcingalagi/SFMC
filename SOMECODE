@@ -128,26 +128,6 @@ IF RequestParameter('submitted') == 'true' THEN /* Check if form is submitted */
 ENDIF
 ]%%
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 <script runat="server">
   Platform.Load("core", "1.1.1");
 
@@ -170,4 +150,36 @@ ENDIF
   }
 </script>
 
+24/3/24
+
+<script runat="server">
+  Platform.Load("core", "1.1.5");
+
+  // Assuming FileData contains the JSON data
+  var fileData = '[{"fileName":"ShellImage.png","fileType":"image/png","fileContent":"filecontent1"},{"fileName":"ShellImage.png","fileType":"image/png","fileContent":"filecontent2"},{"fileName":"ShellImage.png","fileType":"image/png","fileContent":"filecontent3"}]';
+
+  try {
+    var parsedData = Platform.Function.ParseJSON(fileData);
+    if (parsedData && parsedData.length > 0) {
+      var deKey = 'YourDataExtensionExternalKey'; // Replace with your Data Extension External Key
+      var de = DataExtension.Init(deKey);
+      var rows = [];
+
+      for (var i = 0; i < parsedData.length; i++) {
+        var row = {};
+        row.FileName = parsedData[i].fileName;
+        row.FileType = parsedData[i].fileType;
+        row.FileContent = parsedData[i].fileContent;
+        rows.push(row);
+      }
+
+      var insertResult = de.Rows.Add(rows);
+      Write('Rows inserted: ' + insertResult.length);
+    } else {
+      Write('No data found in FileData variable.');
+    }
+  } catch (e) {
+    Write('Error parsing JSON data or inserting into Data Extension: ' + e);
+  }
+</script>
 
